@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>벼룩시장 - 중고거래 플랫폼</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 0 15px;
+      background: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    form {
+      background: white;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 6px;
+      box-shadow: 0 0 5px #ccc;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    input[type="text"], textarea, input[type="number"] {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      resize: vertical;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 15px;
+      background: #0077ff;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    .item-list {
+      background: white;
+      padding: 15px;
+      border-radius: 6px;
+      box-shadow: 0 0 5px #ccc;
+    }
+    .item {
+      border-bottom: 1px solid #ddd;
+      padding: 10px 0;
+    }
+    .item:last-child {
+      border-bottom: none;
+    }
+    .item-title {
+      font-weight: bold;
+      font-size: 1.1em;
+    }
+    .item-desc {
+      margin: 5px 0;
+      white-space: pre-wrap;
+    }
+    .item-price {
+      color: #0077ff;
+      font-weight: bold;
+    }
+    .item-buttons {
+      margin-top: 8px;
+    }
+    .item-buttons button {
+      margin-right: 10px;
+    }
+    #report-form {
+      display: none;
+      background: #ffecec;
+      padding: 10px;
+      border: 1px solid #ff4d4d;
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>벼룩시장</h1>
+
+  <form id="addItemForm">
+    <h2>상품 등록</h2>
+    <label for="title">상품명</label>
+    <input type="text" id="title" required />
+    <label for="desc">설명</label>
+    <textarea id="desc" rows="3" required></textarea>
+    <label for="price">가격(원)</label>
+    <input type="number" id="price" min="0" required />
+    <button type="submit">등록하기</button>
+  </form>
+
+  <div class="item-list" id="itemList">
+    <h2>상품 목록</h2>
+    <!-- 상품들이 여기 표시됩니다 -->
+  </div>
+
+  <script>
+    // 상품 데이터 저장 (localStorage 활용)
+    let items = JSON.parse(localStorage.getItem('items') || '[]');
+
+    function saveItems() {
+      localStorage.setItem('items', JSON.stringify(items));
+    }
+
+    function renderItems() {
+      const list = document.getElementById('itemList');
+      // 목록 중 상품 제목 제외하고 새로 만들기 (h2 제외)
+      list.innerHTML = '<h2>상품 목록</h2>';
+
+      if (items.length === 0) {
+        list.innerHTML += '<p>등록된 상품이 없습니다.</p>';
+        return;
+      }
+
+      items.forEach((item, idx) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'item';
+
+        const now = Date.now();
+        const purchaseTime = item.purchaseDate || 0;
+        const isPurchased = !!item.purchaseDate;
+        // 구매확정 기간 (1일 = 86400000ms)
+        const canConfirm = isPurchased && (now - purchaseTime >= 86400000);
+
+        itemDiv.innerHTML = `
+          <div class="item-title">${item.title}</div>
+          <div class="item-desc">${item.desc}</div>
+          <div class="item-price">${item.price.toLocaleString()} 원</div>
+          <div class="item-buttons">
+            ${isPurchased ? 
+              (canConfirm ? `<button onclick="confirmPurchase(${idx})">구매확정</button>` : `<span>구매 중... (${Math.floor((86400000 - (now - purchaseTime))/3600000)}시간 남음)</span>`)
+              : `<button onclick="purchaseItem(${idx})">구매하기</button>`}
+            <button onclick="showReportForm(${idx})">판매자 신고</button>
+          </div>
+          <div id="report-form-${idx}" class="report-form" style="display:none; margin-top:10px;">
+            <textarea id="report-text-${idx}" rows="2" placeholder="신고 내용을 적어주세요"></textarea>
+            <button onclick="sendReport(${idx})">신고 전송</button>
+            <button onclick="hideReportForm(${idx})">취소</button>
+          </div>
+        `;
+
+        list.appendChild(itemDiv);
+      });
+    }
+
+    function purchaseItem(idx) {
+      if (confirm('이 상품을 구매하시겠습니까? 구매확정은 구매 후 1일 뒤 가능합니다.')) {
+        items[idx].purchaseDate = Date.now();
+        alert('구매 완료! 1일 후 구매확정을 해주세요.');
+        saveItems();
+        renderItems();
+      }
+    }
+
+    function confirmPurchase(idx) {
+      if (confirm('구매를 확정하시겠습니까? 거래가 완료됩니다.')) {
+        items.splice(idx, 1); // 거래 완료 후 상품 삭제 (간단하게 구현)
+        alert('구매확정 완료! 거래가 종료되었습니다.');
+        saveItems();
+        renderItems();
+      }
+    }
+
+    function showReportForm(idx) {
+      document.getElementById(`report-form-${idx}`).style.display = 'block';
+    }
+    function hideReportForm(idx) {
+      document.getElementById(`report-form-${idx}`).style.display = 'none';
+    }
+
+    function sendReport(idx) {
+      const text = document.getElementById(`report-text-${idx}`).value.trim();
+      if (!text) {
+        alert('신고 내용을 입력해 주세요.');
+        return;
+      }
+      // 실제 문자 API는 따로 연동 필요하므로 여기서는 alert로 대체
+      alert(`신고 접수됨!\n내용: ${text}\n문의 전화: 010-1234-5678`); 
+      hideReportForm(idx);
+      document.getElementById(`report-text-${idx}`).value = '';
+    }
+
+    document.getElementById('addItemForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const desc = document.getElementById('desc').value.trim();
+      const price = Number(document.getElementById('price').value);
+
+      if (!title || !desc || isNaN(price) || price < 0) {
+        alert('모든 항목을 올바르게 입력해 주세요.');
+        return;
+      }
+
+      items.push({ title, desc, price });
+      saveItems();
+      renderItems();
+
+      e.target.reset();
+    });
+
+    // 처음 로드 시 목록 렌더링
+    renderItems();
+  </script>
+</body>
+  </html><!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>벼룩시장 - 중고거래 플랫폼</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 0 15px;
+      background: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    form {
+      background: white;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 6px;
+      box-shadow: 0 0 5px #ccc;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    input[type="text"], textarea, input[type="number"] {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      resize: vertical;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 15px;
+      background: #0077ff;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    .item-list {
+      background: white;
+      padding: 15px;
+      border-radius: 6px;
+      box-shadow: 0 0 5px #ccc;
+    }
+    .item {
+      border-bottom: 1px solid #ddd;
+      padding: 10px 0;
+    }
+    .item:last-child {
+      border-bottom: none;
+    }
+    .item-title {
+      font-weight: bold;
+      font-size: 1.1em;
+    }
+    .item-desc {
+      margin: 5px 0;
+      white-space: pre-wrap;
+    }
+    .item-price {
+      color: #0077ff;
+      font-weight: bold;
+    }
+    .item-buttons {
+      margin-top: 8px;
+    }
+    .item-buttons button {
+      margin-right: 10px;
+    }
+    #report-form {
+      display: none;
+      background: #ffecec;
+      padding: 10px;
+      border: 1px solid #ff4d4d;
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>벼룩시장</h1>
+
+  <form id="addItemForm">
+    <h2>상품 등록</h2>
+    <label for="title">상품명</label>
+    <input type="text" id="title" required />
+    <label for="desc">설명</label>
+    <textarea id="desc" rows="3" required></textarea>
+    <label for="price">가격(원)</label>
+    <input type="number" id="price" min="0" required />
+    <button type="submit">등록하기</button>
+  </form>
+
+  <div class="item-list" id="itemList">
+    <h2>상품 목록</h2>
+    <!-- 상품들이 여기 표시됩니다 -->
+  </div>
+
+  <script>
+    // 상품 데이터 저장 (localStorage 활용)
+    let items = JSON.parse(localStorage.getItem('items') || '[]');
+
+    function saveItems() {
+      localStorage.setItem('items', JSON.stringify(items));
+    }
+
+    function renderItems() {
+      const list = document.getElementById('itemList');
+      // 목록 중 상품 제목 제외하고 새로 만들기 (h2 제외)
+      list.innerHTML = '<h2>상품 목록</h2>';
+
+      if (items.length === 0) {
+        list.innerHTML += '<p>등록된 상품이 없습니다.</p>';
+        return;
+      }
+
+      items.forEach((item, idx) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'item';
+
+        const now = Date.now();
+        const purchaseTime = item.purchaseDate || 0;
+        const isPurchased = !!item.purchaseDate;
+        // 구매확정 기간 (1일 = 86400000ms)
+        const canConfirm = isPurchased && (now - purchaseTime >= 86400000);
+
+        itemDiv.innerHTML = `
+          <div class="item-title">${item.title}</div>
+          <div class="item-desc">${item.desc}</div>
+          <div class="item-price">${item.price.toLocaleString()} 원</div>
+          <div class="item-buttons">
+            ${isPurchased ? 
+              (canConfirm ? `<button onclick="confirmPurchase(${idx})">구매확정</button>` : `<span>구매 중... (${Math.floor((86400000 - (now - purchaseTime))/3600000)}시간 남음)</span>`)
+              : `<button onclick="purchaseItem(${idx})">구매하기</button>`}
+            <button onclick="showReportForm(${idx})">판매자 신고</button>
+          </div>
+          <div id="report-form-${idx}" class="report-form" style="display:none; margin-top:10px;">
+            <textarea id="report-text-${idx}" rows="2" placeholder="신고 내용을 적어주세요"></textarea>
+            <button onclick="sendReport(${idx})">신고 전송</button>
+            <button onclick="hideReportForm(${idx})">취소</button>
+          </div>
+        `;
+
+        list.appendChild(itemDiv);
+      });
+    }
+
+    function purchaseItem(idx) {
+      if (confirm('이 상품을 구매하시겠습니까? 구매확정은 구매 후 1일 뒤 가능합니다.')) {
+        items[idx].purchaseDate = Date.now();
+        alert('구매 완료! 1일 후 구매확정을 해주세요.');
+        saveItems();
+        renderItems();
+      }
+    }
+
+    function confirmPurchase(idx) {
+      if (confirm('구매를 확정하시겠습니까? 거래가 완료됩니다.')) {
+        items.splice(idx, 1); // 거래 완료 후 상품 삭제 (간단하게 구현)
+        alert('구매확정 완료! 거래가 종료되었습니다.');
+        saveItems();
+        renderItems();
+      }
+    }
+
+    function showReportForm(idx) {
+      document.getElementById(`report-form-${idx}`).style.display = 'block';
+    }
+    function hideReportForm(idx) {
+      document.getElementById(`report-form-${idx}`).style.display = 'none';
+    }
+
+    function sendReport(idx) {
+      const text = document.getElementById(`report-text-${idx}`).value.trim();
+      if (!text) {
+        alert('신고 내용을 입력해 주세요.');
+        return;
+      }
+      // 실제 문자 API는 따로 연동 필요하므로 여기서는 alert로 대체
+      alert(`신고 접수됨!\n내용: ${text}\n문의 전화: 010-1234-5678`); 
+      hideReportForm(idx);
+      document.getElementById(`report-text-${idx}`).value = '';
+    }
+
+    document.getElementById('addItemForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const desc = document.getElementById('desc').value.trim();
+      const price = Number(document.getElementById('price').value);
+
+      if (!title || !desc || isNaN(price) || price < 0) {
+        alert('모든 항목을 올바르게 입력해 주세요.');
+        return;
+      }
+
+      items.push({ title, desc, price });
+      saveItems();
+      renderItems();
+
+      e.target.reset();
+    });
+
+    // 처음 로드 시 목록 렌더링
+    renderItems();
+  </script>
+</body>
+</html>
